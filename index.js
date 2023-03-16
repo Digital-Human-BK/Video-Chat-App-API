@@ -1,29 +1,50 @@
-const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
-// const cors = require("cors");
+const http = require('http');
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server);
 
-app.get('/', (req, res) => {
-  res.send('hello there');
-});
+const PORT = process.env.PORT || 3030;
+let usersData = [];
 
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  },
-});
+const addUser = (roomId, userName) => {
+  usersData.push({
+    userName,
+    roomId,
+  });
+};
+
+const removeUser = (userName) => {
+  usersData = usersData.filter((user) => user.userName !== userName);
+};
+
+const getRoomUsers = (roomId) => {
+  return usersData.filter((user) => user.roomId === roomId);
+};
 
 io.on('connection', (socket) => {
-  console.log('Someone connected!');
-  socket.on('join_room', ({ roomId, userId }) => {
-    console.log(`User with id: ${userId} joined room ${roomId}`);
+  console.log('a user connected');
+
+  socket.on('join_room', ({ roomId, userName }) => {
+    console.log(`${userName} joined room: ${roomId}`);
+
+    socket.join(roomId);
+    addUser(roomId, userName);
+    socket.to(roomId).emit('user_connected', userName);
+
+    io.to(roomId).emit('all_users', getRoomUsers(roomId));
+
+    socket.on('disconnect', () => {
+      console.log(`User ${userName} disconnected!`);
+      socket.leave(roomId);
+      removeUser(userName);
+      io.to(roomId).emit('all_users', getRoomUsers(roomId));
+    });
   });
 });
 
 server.listen(3030, () => {
-  console.log('Server is running on port 3030!');
+  console.log(`Server listening on port: ${PORT}`);
 });
